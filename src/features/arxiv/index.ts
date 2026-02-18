@@ -47,6 +47,12 @@ export const arxivPlugin: FormPlugin = {
         // Determine if we should scan
         const shouldScrape = opts.scan || (!opts.checkSlack && !opts.web);
 
+        // Start Socket Mode early so user can interact with Slack buttons during scanning
+        let socketClient: Awaited<ReturnType<typeof startSocketMode>> = null;
+        if (!opts.web && !globalOpts.dryRun) {
+            socketClient = await startSocketMode(config);
+        }
+
         if (opts.checkSlack) {
             await checkSlackForSavedPapers(config, globalOpts.dryRun);
         } else if (shouldScrape) {
@@ -109,6 +115,20 @@ export const arxivPlugin: FormPlugin = {
 
                         allRelevantSummaries.push(...categoryRelevant);
                         allSummarizedForFile.push(...categorySummarized);
+
+                        // 4. Notify Slack immediately for this category
+                        if (categoryRelevant.length > 0) {
+                            console.log(`[${category}] Sending ${categoryRelevant.length} relevant papers to Slack...`);
+                            if (globalOpts.dryRun) {
+                                console.log('[DRY RUN] Would send to Slack.');
+                            } else {
+                                const sentMap = await sendSummariesToSlack(categoryRelevant, config);
+                                for (const [id, ts] of sentMap) {
+                                    updatePaperSlackTs(id, ts);
+                                }
+                                console.log(`[${category}] Sent to Slack.`);
+                            }
+                        }
                     } else {
                         console.log(`[${category}] No new papers found.`);
                     }
@@ -122,19 +142,7 @@ export const arxivPlugin: FormPlugin = {
                     console.error('Failed to save combined summary:', e);
                 }
 
-                // 4. Notify Slack (all relevant papers at once)
-                if (allRelevantSummaries.length > 0) {
-                    console.log('\nSending to Slack...');
-                    if (globalOpts.dryRun) {
-                        console.log('[DRY RUN] Would send to Slack.');
-                    } else {
-                        const sentMap = await sendSummariesToSlack(allRelevantSummaries, config);
-                        for (const [id, ts] of sentMap) {
-                            updatePaperSlackTs(id, ts);
-                        }
-                        console.log('Sent to Slack and updated DB.');
-                    }
-                } else {
+                if (allRelevantSummaries.length === 0) {
                     console.log('\nNo new relevant papers found across all categories.');
                 }
 
@@ -152,9 +160,6 @@ export const arxivPlugin: FormPlugin = {
         if (waitMins > 0 && !opts.web) {
             console.log(`\nEntering polling mode for ${waitMins} minutes...`);
             console.log('Press Ctrl+C to exit early.\n');
-
-            // Start Socket Mode
-            const socketClient = await startSocketMode(config);
 
             const endTime = Date.now() + waitMins * 60 * 1000;
             const intervalMs = 30 * 1000;
