@@ -10,7 +10,12 @@ export interface SummarizedPaper extends Paper {
     // Paper already has abstract, so it will be preserved if we spread ...paper
 }
 
-export async function summarizePapers(papers: Paper[], config: AppConfig, batchSize: number = 10): Promise<SummarizedPaper[]> {
+export async function summarizePapers(
+    papers: Paper[],
+    config: AppConfig,
+    batchSize: number = 10,
+    onBatchComplete?: (batchResults: SummarizedPaper[]) => Promise<void>,
+): Promise<SummarizedPaper[]> {
     const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
     const model = genAI.getGenerativeModel({
         model: config.gemini.model,
@@ -97,6 +102,13 @@ ${JSON.stringify(papersForPrompt, null, 2)}
                     relevance: 'IRRELEVANT',
                 });
             }
+        }
+
+        // Notify caller of batch results
+        if (onBatchComplete) {
+            const batchStart = allSummarized.length - batch.length;
+            const batchResults = allSummarized.slice(batchStart);
+            await onBatchComplete(batchResults);
         }
 
         // Rate limiting / niceness

@@ -84,10 +84,42 @@ export const arxivPlugin: FormPlugin = {
                     if (newPapers.length > 0) {
                         // 2. Summarize (separate Gemini query per category)
                         console.log(`[${category}] Summarizing ${newPapers.length} new papers...`);
-                        const categorySummarized = await summarizePapers(newPapers, config, batchSize);
-                        const categoryRelevant = categorySummarized.filter(p => p.relevance === 'RELEVANT');
 
-                        console.log(`[${category}] Relevant: ${categoryRelevant.length}, Irrelevant: ${categorySummarized.length - categoryRelevant.length}`);
+                        // Use callback to save to DB and send to Slack after each batch
+                        const categorySummarized = await summarizePapers(newPapers, config, batchSize, async (batchResults) => {
+                            const batchRelevant = batchResults.filter(p => p.relevance === 'RELEVANT');
+
+                            // Save to DB immediately
+                            for (const paper of batchRelevant) {
+                                savePaperToDb({
+                                    id: paper.id,
+                                    title: paper.title,
+                                    summary: paper.summary,
+                                    published_date: '',
+                                    scanned_at: new Date().toISOString(),
+                                    category,
+                                });
+                            }
+
+                            // Send to Slack immediately
+                            if (batchRelevant.length > 0) {
+                                console.log(`[${category}] Sending ${batchRelevant.length} relevant papers to Slack...`);
+                                if (globalOpts.dryRun) {
+                                    console.log('[DRY RUN] Would send to Slack.');
+                                } else {
+                                    const sentMap = await sendSummariesToSlack(batchRelevant, config);
+                                    for (const [id, ts] of sentMap) {
+                                        updatePaperSlackTs(id, ts);
+                                    }
+                                    console.log(`[${category}] Sent batch to Slack.`);
+                                }
+                            }
+
+                            allRelevantSummaries.push(...batchRelevant);
+                        });
+
+                        const categoryRelevant = categorySummarized.filter(p => p.relevance === 'RELEVANT');
+                        console.log(`[${category}] Total — Relevant: ${categoryRelevant.length}, Irrelevant: ${categorySummarized.length - categoryRelevant.length}`);
 
                         // 3. Save to per-category JSON file
                         const filename = `arxiv-summary-${category}.json`;
@@ -101,34 +133,7 @@ export const arxivPlugin: FormPlugin = {
                             console.error(`[${category}] Failed to save summaries to file:`, e);
                         }
 
-                        // Save to DB with correct category
-                        for (const paper of categoryRelevant) {
-                            savePaperToDb({
-                                id: paper.id,
-                                title: paper.title,
-                                summary: paper.summary,
-                                published_date: '',
-                                scanned_at: new Date().toISOString(),
-                                category,
-                            });
-                        }
-
-                        allRelevantSummaries.push(...categoryRelevant);
                         allSummarizedForFile.push(...categorySummarized);
-
-                        // 4. Notify Slack immediately for this category
-                        if (categoryRelevant.length > 0) {
-                            console.log(`[${category}] Sending ${categoryRelevant.length} relevant papers to Slack...`);
-                            if (globalOpts.dryRun) {
-                                console.log('[DRY RUN] Would send to Slack.');
-                            } else {
-                                const sentMap = await sendSummariesToSlack(categoryRelevant, config);
-                                for (const [id, ts] of sentMap) {
-                                    updatePaperSlackTs(id, ts);
-                                }
-                                console.log(`[${category}] Sent to Slack.`);
-                            }
-                        }
                     } else {
                         console.log(`[${category}] No new papers found.`);
                     }
