@@ -125,7 +125,7 @@ app.post('/api/add', async (req, res) => {
             summary: paper.abstract || paper.summary || '',
             published_date: '', // TODO
             scanned_at: new Date().toISOString(),
-            category: 'hep-ex', // Default
+            category: paper.category || 'hep-ex',
             saved_at: new Date().toISOString()
         });
 
