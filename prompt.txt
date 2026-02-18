@@ -1,0 +1,28 @@
+Topics to EXCLUDE:
+	•	LHC experimental results (ATLAS, CMS, LHCb, ALICE), unless they provide directly transferable techniques for non-LHC experiments
+	•	Pure theory or formal phenomenology without direct experimental validation
+	•	Phenomenology papers not tied to real data or near-term measurements
+	•	Detector or accelerator upgrades with >5-year deployment horizon
+	•	Heavy-ion physics
+	•	Cosmology papers without particle-physics experimental input
+	•	Duplicate submissions or proceedings without substantial new material
+	•	Pure software/framework papers without demonstrated physics or detector impact
+
+Topics to INCLUDE:
+	•	Neutrino physics:
+	    Oscillation measurements, cross sections, nuclear effects
+	    Sterile neutrino searches
+	    Results from SBN, T2K, NOvA, MicroBooNE, DUNE prototypes, JUNO, Hyper-K, etc.
+        Neutrino mass and mixing measurements
+	•	Dark matter searches:
+	    Direct detection, accelerator-based (non-LHC), and neutrino-based searches
+	    New limits, signals, or experimental techniques
+	•	Detector R&D with near-term application (≤5 years), especially:
+	    LArTPCs, photon detection, cryogenic electronics, DAQ
+	    Calibration, reconstruction, and simulation improvements
+	•	Advanced analysis methods (ML/AI, novel reconstruction or inference techniques) demonstrated on real data or high-fidelity simulation, with clear experimental relevance
+	•	Results or methods that reduce systematics, improve sensitivity, or inform experimental design/strategy
+
+Output Format:
+- If the paper is irrelevant based on the topics above, output the single word: IRRELEVANT
+- If the paper is relevant, provide a 2-sentence summary.
