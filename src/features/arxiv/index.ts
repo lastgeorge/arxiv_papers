@@ -71,15 +71,40 @@ export const arxivPlugin: FormPlugin = {
                 for (const category of categories) {
                     console.log(`\n=== Scanning [${category}] (${mode}) ===`);
 
-                    // 1. Scrape
-                    const papers = await scrapeArxiv(session, category, mode, limit);
-                    console.log(`[${category}] Scraped ${papers.length} papers.`);
-
-                    // Filter out papers already in DB
-                    const newPapers = papers.filter(p => !getPaper(p.id));
-                    if (newPapers.length < papers.length) {
-                        console.log(`[${category}] Skipping ${papers.length - newPapers.length} papers already in DB.`);
+                    // 0. Load existing JSON to remember irrelevant papers
+                    const summaryFilename = `arxiv-summary-${category}.json`;
+                    const summaryFilepath = path.resolve(process.cwd(), 'data', summaryFilename);
+                    let existingCategorySummaries: any[] = [];
+                    try {
+                        const content = await fs.readFile(summaryFilepath, 'utf8');
+                        existingCategorySummaries = JSON.parse(content);
+                    } catch (e) {
+                        // ignore if file doesn't exist
                     }
+                    const seenInJson = new Set(existingCategorySummaries.map((s: any) => s.id));
+
+                    // 1. Scrape
+                    let alreadyExistsCount = 0;
+                    const papers = await scrapeArxiv(session, category, mode, limit, (id) => {
+                        const existsInDb = !!getPaper(id);
+                        const existsInJson = seenInJson.has(id);
+                        const exists = existsInDb || existsInJson;
+                        if (exists) alreadyExistsCount++;
+                        return exists;
+                    });
+                    console.log(`[${category}] Scraped ${papers.length} new papers.`);
+                    if (alreadyExistsCount > 0) {
+                        console.log(`[${category}] Skipped ${alreadyExistsCount} papers already in DB.`);
+                    }
+
+                    // If we're scanning 'new' and found NO new papers but did find existing ones, 
+                    // it means arXiv hasn't updated its daily batch yet. We should quit early.
+                    if (mode === 'new' && papers.length === 0 && alreadyExistsCount > 0) {
+                        console.log(`\n[!] No new papers found in ${category} (all already in DB). arXiv likely hasn't updated today. Quitting later parts to save resources.`);
+                        break;
+                    }
+
+                    const newPapers = papers;
 
                     if (newPapers.length > 0) {
                         // 2. Summarize (separate Gemini query per category)
@@ -122,13 +147,11 @@ export const arxivPlugin: FormPlugin = {
                         console.log(`[${category}] Total — Relevant: ${categoryRelevant.length}, Irrelevant: ${categorySummarized.length - categoryRelevant.length}`);
 
                         // 3. Save to per-category JSON file
-                        const filename = `arxiv-summary-${category}.json`;
-                        const filepath = path.resolve(process.cwd(), 'data', filename);
-
                         try {
-                            await fs.mkdir(path.dirname(filepath), { recursive: true });
-                            await fs.writeFile(filepath, JSON.stringify(categorySummarized, null, 2));
-                            console.log(`[${category}] Saved report to ${filepath}`);
+                            await fs.mkdir(path.dirname(summaryFilepath), { recursive: true });
+                            const mergedCategorySummaries = [...existingCategorySummaries, ...categorySummarized];
+                            await fs.writeFile(summaryFilepath, JSON.stringify(mergedCategorySummaries, null, 2));
+                            console.log(`[${category}] Saved report to ${summaryFilepath}`);
                         } catch (e) {
                             console.error(`[${category}] Failed to save summaries to file:`, e);
                         }
@@ -142,7 +165,13 @@ export const arxivPlugin: FormPlugin = {
                 // Also save a combined summary file for backward compat
                 try {
                     const combinedPath = path.resolve(process.cwd(), 'data', 'arxiv-summary.json');
-                    await fs.writeFile(combinedPath, JSON.stringify(allSummarizedForFile, null, 2));
+                    let existingCombined: any[] = [];
+                    try {
+                        const content = await fs.readFile(combinedPath, 'utf8');
+                        existingCombined = JSON.parse(content);
+                    } catch (e) { }
+                    const mergedCombined = [...existingCombined, ...allSummarizedForFile];
+                    await fs.writeFile(combinedPath, JSON.stringify(mergedCombined, null, 2));
                 } catch (e) {
                     console.error('Failed to save combined summary:', e);
                 }

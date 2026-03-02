@@ -17,6 +17,7 @@ export async function scrapeArxiv(
     category: string,
     mode: ScanMode = 'new',
     limit: number = 0,
+    checkExists?: (id: string) => boolean
 ): Promise<Paper[]> {
     const page = await session.newPage();
     const url = `https://arxiv.org/list/${category}/${mode}`;
@@ -35,7 +36,12 @@ export async function scrapeArxiv(
     for (const link of papersToProcess) {
         const href = await link.getAttribute('href');
         if (href) {
-            urls.push(`https://arxiv.org${href}`);
+            const id = href.split('/').pop() || '';
+            if (checkExists && checkExists(id)) {
+                // skip already known papers
+            } else {
+                urls.push(`https://arxiv.org${href}`);
+            }
         }
     }
 
