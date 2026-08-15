@@ -1,0 +1,19 @@
+# Secrets -- never commit. Added 2026-08-15 after an accidental credential
+# commit in a sibling repo; these patterns are the ones that mattered there.
+.env
+.env.*
+!.env.example
+gen-lang-client-*.json
+*service-account*.json
+credentials.json
+token.json
+*.pem
+passwordfile
+*.cookie
+
+# Local junk
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+.DS_Store
